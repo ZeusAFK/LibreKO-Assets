@@ -167,6 +167,8 @@ def main() -> int:
             if effect is None and int(m.get("Etc", 0) or 0) > 0:
                 effect = table.get(int(m.get("Etc", 0) or 0))
             effect = dict(effect or {})
+            if type1 == 1 and not effect.get("Radius"):
+                effect["Radius"] = type_tables.get(3, {}).get(sid, {}).get("Radius", 0)
             record = presentation_fields(sid, pr, granted["name"] if granted else str(sid), fx_ids)
             if pr is None and granted:
                 record["desc"] = granted.get("desc", "")
@@ -218,6 +220,11 @@ def main() -> int:
             skills[str(sid)] = presentation_fields(sid, pr, str(sid), fx_ids)
         source = f"{len(presentation)} client rows, presentation only"
 
+    overrides = Path(__file__).with_name("skill_overrides.json")
+    if overrides.is_file():
+        for sid, fields in json.loads(overrides.read_text(encoding="utf-8")).items():
+            if sid in skills:
+                skills[sid].update(fields)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "skills.json").write_text(
         json.dumps(skills, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
