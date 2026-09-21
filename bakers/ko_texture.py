@@ -88,7 +88,6 @@ def decode_ntf(blob):
 
     rgba = bytes(decode_to_rgba(payload, w, h, fmt))
     out = np.frombuffer(rgba, np.uint8).reshape(h, w, 4).copy()
-    # X8R8G8B8 has no real alpha; a fully-transparent result means "unused" -> force opaque.
-    if fmt == D3DFormat.X8R8G8B8 or out[:, :, 3].max() == 0:
+    if fmt == D3DFormat.X8R8G8B8:
         out[:, :, 3] = 255
     return w, h, out
