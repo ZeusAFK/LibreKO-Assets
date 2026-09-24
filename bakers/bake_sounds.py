@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import struct
 import sys
 from pathlib import Path
@@ -34,6 +35,10 @@ LOOKS_SND = {
 ITEM_SND0, ITEM_SND1 = 8, 9
 ZONE_BGM = {"elBattle": 18, "elAmbient": 19, "kaBattle": 20, "kaAmbient": 21}
 MOVE_SND_COLS = ["walk1", "walk2", "run1", "run2", "run3"]
+
+LOUDNESS_CEILING_DB = -13.0
+LOUDNESS_WINDOW_S = 0.4
+MIN_GAIN_CUT_DB = 0.5
 
 
 def rel_name(entry: str) -> str:
@@ -127,7 +132,46 @@ def extract(ko: Path, out: Path, dry: bool) -> dict[str, int]:
     return sizes
 
 
-def build_manifest(ko: Path, present: dict[str, int]) -> dict:
+def loud_window_db(path: Path) -> float | None:
+    """RMS level of the loudest LOUDNESS_WINDOW_S of a file, in dBFS."""
+    import numpy as np
+    import soundfile as sf
+
+    try:
+        x, rate = sf.read(str(path), always_2d=True)
+    except Exception:
+        return None
+    if len(x) == 0:
+        return None
+    mono = x.mean(axis=1)
+    window = max(1, int(rate * LOUDNESS_WINDOW_S))
+    energy = np.concatenate([[0.0], np.cumsum(mono * mono)])
+    if len(mono) > window:
+        mean_square = float(((energy[window:] - energy[:-window]) / window).max())
+    else:
+        mean_square = float(energy[-1] / len(mono))
+    return 20 * math.log10(math.sqrt(mean_square) + 1e-9)
+
+
+def level_gains(out: Path, sounds: dict[str, dict]) -> None:
+    """Retail ships some effects 10+ dB hotter than the rest; pull those down to the ceiling."""
+    levels: dict[str, float | None] = {}
+    cut = 0
+    for entry in sounds.values():
+        if entry["type"] == SND_STREAM:
+            continue
+        name = entry["file"]
+        if name not in levels:
+            levels[name] = loud_window_db(out / name)
+        level = levels[name]
+        if level is None or level - LOUDNESS_CEILING_DB < MIN_GAIN_CUT_DB:
+            continue
+        entry["gain"] = round(LOUDNESS_CEILING_DB - level, 1)
+        cut += 1
+    print("  loudness: %d sounds above %.0f dBFS get a gain cut" % (cut, LOUDNESS_CEILING_DB))
+
+
+def build_manifest(ko: Path, present: dict[str, int], out: Path) -> dict:
     data = ko / "Data"
 
     sounds: dict[str, dict] = {}
@@ -143,6 +187,7 @@ def build_manifest(ko: Path, present: dict[str, int]) -> dict:
         sounds[str(sid)] = {"file": name, "type": int(itype), "inst": int(inst)}
     print("  sound.tbl: %d ids resolve, %d reference files absent from the archive"
           % (len(sounds), missing))
+    level_gains(out, sounds)
 
     known = set(sounds)
 
@@ -221,7 +266,7 @@ def main() -> int:
     present = extract(args.ko, args.out, dry=args.manifest_only)
 
     print("[sounds] manifest")
-    manifest = build_manifest(args.ko, present)
+    manifest = build_manifest(args.ko, present, args.out)
     args.out.mkdir(parents=True, exist_ok=True)
     dst = args.out / "sounds.json"
     dst.write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")

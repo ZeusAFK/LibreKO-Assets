@@ -2,3 +2,4 @@ pillow>=10.0
 numpy>=1.24
 pygltflib>=1.16
 scipy>=1.10
+soundfile>=0.12

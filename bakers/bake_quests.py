@@ -48,6 +48,8 @@ Output: <output>/quests/quests.json
                                "exp": <n>, "exchange": <n>,
                                "level": <n>, "class": <n>, "nation": <n>, "zone": <n>,
                                "give": [ [itemId, count], ... ], "need": [ [itemId, count], ... ],
+                               "classes": [helperClass, ...],
+                               "giveByClass": { "<helperClass>": [ [itemId, count], ... ] },
                                "groups": [ { "npcs": [..], "count": <n> }, ... ] }, ... } }
 
 Domain/QuestData.cs reads only this JSON (joining the EventTalkIndex fallback through
@@ -150,6 +152,7 @@ def _load_helpers(data_dir: Path,
     # (multi-phase / per-NPC); sort by Index and keep the lowest-Index one per state so the
     # pick is deterministic (the first phase). Status 255 = a bare NPC greeting -- skip it.
     by_quest: dict[int, dict[int, list]] = {}
+    by_class: dict[int, dict[int, list]] = {}
     npc_states: dict[int, dict[int, set[int]]] = {}
     npc_helpers: dict[int, dict[int, dict[int, int]]] = {}
     for row in sorted((r for r in t.rows if len(r) > H_GUIDE), key=lambda r: int(r[0])):
@@ -162,6 +165,8 @@ def _load_helpers(data_dir: Path,
             npc_states.setdefault(qid, {}).setdefault(status, set()).add(npc)
             npc_helpers.setdefault(qid, {}).setdefault(status, {}).setdefault(npc, int(row[0]))
         by_quest.setdefault(qid, {}).setdefault(status, row)
+        if status == 2:
+            by_class.setdefault(qid, {}).setdefault(int(row[H_CLASS]), row)
 
     quests: dict[str, dict] = {}
     for qid, states in by_quest.items():
@@ -193,6 +198,13 @@ def _load_helpers(data_dir: Path,
         give, need = exchanges.get(entry["exchange"], ([], []))
         if give:
             entry["give"] = give
+        classes = by_class.get(qid, {})
+        if len(classes) > 1:
+            entry["classes"] = sorted(classes)
+            per_class = {str(cls): exchanges.get(int(row[H_EXCHANGE]), ([], []))[0]
+                         for cls, row in sorted(classes.items())}
+            if len({json.dumps(g) for g in per_class.values()}) > 1:
+                entry["giveByClass"] = per_class
         if need:
             entry["need"] = need
         quests[str(qid)] = entry
