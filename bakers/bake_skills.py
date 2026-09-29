@@ -38,6 +38,7 @@ _SK_NEED_WEAPON, _SK_NEED_ITEM = 20, 21
 # equipped weapon (one-handed, two-handed, jamadar). The main table's SelfAnim1 only classifies a
 # Type-1 skill; it is never its animation.
 _T1_ID, _T1_ANIM_1H, _T1_ANIM_2H, _T1_ANIM_JAMADAR = 0, 9, 10, 11
+_BUFF_TYPE = 4
 
 
 def _fx_stem(path: str, fx_dir: Path) -> str | None:
@@ -174,6 +175,9 @@ def main() -> int:
             effect = dict(effect or {})
             if type1 == 1 and not effect.get("Radius"):
                 effect["Radius"] = type_tables.get(3, {}).get(sid, {}).get("Radius", 0)
+            type2 = int(m.get("Type2", 0) or 0)
+            buff2 = (type_tables.get(_BUFF_TYPE, {}).get(sid) or {}) \
+                if type2 == _BUFF_TYPE and type1 != _BUFF_TYPE else {}
             record = presentation_fields(sid, pr, granted["name"] if granted else str(sid), fx_ids)
             if pr is None and granted:
                 record["desc"] = granted.get("desc", "")
@@ -213,6 +217,8 @@ def main() -> int:
                 "radius": effect.get("Radius", 0),
                 "angle": effect.get("Angle", 0),
                 "buffType": effect.get("BuffType", effect.get("Type", 0)),
+                "buff2Type": buff2.get("BuffType", 0),
+                "buff2Duration": buff2.get("Duration", 0),
                 "effect": effect,
             })
             skills[str(sid)] = record
