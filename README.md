@@ -31,7 +31,7 @@ A full run takes a while — the character, object and sound stages dominate. Us
 |---|---|
 | `--list` | print the pipeline and exit |
 | `--dry-run` | show what would run, change nothing |
-| `--only NAME ...` | run just these stages or steps |
+| `--only NAME ...` | run just these stages or steps; `imports` always runs after them unless skipped |
 | `--skip NAME ...` | run everything except these |
 | `--keep-going` | continue past a failing step instead of stopping |
 | `--verbose` | stream each step's own output |
@@ -60,6 +60,7 @@ Stages run in order, and the order matters — later stages read what earlier on
 | `ui` | cursors, warp data, target symbol |
 | `sky` | moon disc |
 | `sound` | audio archive to ogg |
+| `imports` | Godot import sidecars: VRAM compression and mipmaps for the 3D texture folders |
 
 Two ordering rules are load-bearing and easy to break by hand:
 

@@ -149,6 +149,14 @@ STAGES: tuple[Stage, ...] = (
             Step("sounds", "bake_sounds"),
         ),
     ),
+    Stage(
+        "imports",
+        "Godot import sidecars",
+        (
+            Step("texture-imports", "fix_texture_imports",
+                 note="VRAM compression and mipmaps for every texture a 3D material samples"),
+        ),
+    ),
 )
 
 
@@ -160,11 +168,15 @@ def stage_names() -> list[str]:
     return [stage.name for stage in STAGES]
 
 
+ALWAYS_STAGE = "imports"
+
+
 def select(only: list[str] | None, skip: list[str] | None) -> list[tuple[Stage, Step]]:
     chosen = all_steps()
     if only:
         wanted = set(only)
-        chosen = [(st, sp) for st, sp in chosen if st.name in wanted or sp.name in wanted]
+        chosen = [(st, sp) for st, sp in chosen
+                  if st.name in wanted or sp.name in wanted or st.name == ALWAYS_STAGE]
     if skip:
         unwanted = set(skip)
         chosen = [(st, sp) for st, sp in chosen if st.name not in unwanted and sp.name not in unwanted]
