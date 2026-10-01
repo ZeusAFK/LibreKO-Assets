@@ -235,19 +235,20 @@ def _raw_special_amount(row) -> int:
 def _ext_bonuses(row) -> dict[str, int]:
     # One uniform Item_Ext column layout, validated against the server's expanded item table across all
     # 44 extension categories (1231/1232 stat fields agree, Duration/Damage 88/88, ReqStr 87/88):
-    # col8 damage, col12 durability, col14 AC, col15-19 + col31-35 the five stats, col36/37 HP/MP,
-    # col38-43 the six resists, col22-25 elemental damage, col44 enchant level, col49 required strength.
+    # col8 damage, col10/11 hit and dodge %, col12 durability, col14 AC, col15-21 the seven weapon
+    # defences (dagger, jamadar, sword, club, axe, spear, arrow), col31-35 the five stats, col36/37 HP/MP,
+    # col38-43 the six resists, col22-25 elemental damage, col44 enchant level, col46 required level, col49-53 required STR/STA/DEX/INT/CHA.
     # The per-category branches this replaced read only a handful of these, so most ext bonuses were
     # silently baked as zero (a ring showing INT only, no AC/HP/MP/resists).
     return {
         "magicOrRare": _cs(row, 7),
         "bonusDamage": _cs(row, 8),
         "bonusAc": _cs(row, 14),
-        "bonusStr": _cs(row, 15) + _cs(row, 31),
-        "bonusSta": _cs(row, 16) + _cs(row, 32),
-        "bonusDex": _cs(row, 17) + _cs(row, 33),
-        "bonusInt": _cs(row, 18) + _cs(row, 34),
-        "bonusCha": _cs(row, 19) + _cs(row, 35),
+        "bonusStr": _cs(row, 31),
+        "bonusSta": _cs(row, 32),
+        "bonusDex": _cs(row, 33),
+        "bonusInt": _cs(row, 34),
+        "bonusCha": _cs(row, 35),
         "bonusMaxHp": _cs(row, 36),
         "bonusMaxMp": _cs(row, 37),
         "bonusFireR": _cs(row, 38),
@@ -256,12 +257,26 @@ def _ext_bonuses(row) -> dict[str, int]:
         "bonusMagicR": _cs(row, 41),
         "bonusPoisonR": _cs(row, 42),
         "bonusCurseR": _cs(row, 43),
+        "bonusHitrate": _cs(row, 10),
+        "bonusEvasionrate": _cs(row, 11),
+        "bonusDaggerAc": _cs(row, 15),
+        "bonusJamadarAc": _cs(row, 16),
+        "bonusSwordAc": _cs(row, 17),
+        "bonusClubAc": _cs(row, 18),
+        "bonusAxeAc": _cs(row, 19),
+        "bonusSpearAc": _cs(row, 20),
+        "bonusArrowAc": _cs(row, 21),
         "fireDamage": _cs(row, 22),
         "iceDamage": _cs(row, 23),
         "lightningDamage": _cs(row, 24),
         "poisonDamage": _cs(row, 25),
         "durationBonus": _cs(row, 12),
         "reqStrBonus": _cs(row, 49),
+        "reqStaBonus": _cs(row, 50),
+        "reqDexBonus": _cs(row, 51),
+        "reqIntBonus": _cs(row, 52),
+        "reqChaBonus": _cs(row, 53),
+        "reqLevelBonus": _cs(row, 46),
         "plus": _cs(row, 44),
     }
 
@@ -302,7 +317,7 @@ def bake_extensions() -> dict[str, dict[str, dict]]:
                 "priceMultiply": _i(r, C_EXT_PRICE_MULTIPLY),
                 "raw": raw,
             }
-            rec.update(bonuses)
+            rec.update({key: value for key, value in bonuses.items() if value != 0})
             cat_map[str(ext_id)] = rec
         if cat_map:
             out[str(cat)] = cat_map
