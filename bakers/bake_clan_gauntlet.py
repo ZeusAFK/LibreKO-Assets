@@ -13,6 +13,10 @@ is per race -- each race carries its own local transform onto the same nation me
 there are 35 plugs for 10 meshes. Textures are whatever the plug names: grades 4 and 5 have their
 own, the lower three share a clan texture.
 
+Each plug also embeds the FX guide mesh CN3CPlug::RenderFX paints clan_rank_1 onto. That sheet
+sits on the outer face of the gauntlet. It is the same for every race that shares a nation mesh,
+so it is written once per stem under fxguide/ and named from the index as "fxg".
+
 Usage:
     python bake.py --only bake_clan_gauntlet
 """
@@ -71,10 +75,11 @@ def bake(out_dir: Path) -> dict:
                     texture_uri_prefix="tex/",
                 )
                 stem_cache[stem] = (tid is not None, int(pos.shape[0]))
+                write_fx_guide(plug, stem, out_dir)
 
             gpos, gquat = bake_weapons._convert_transform(plug.position, plug.rot_matrix)
             textured, verts = stem_cache[stem]
-            index[f"{race}_{grade}"] = {
+            record = {
                 "stem": stem,
                 "joint": plug.joint_index,
                 "pos": gpos,
@@ -86,16 +91,73 @@ def bake(out_dir: Path) -> dict:
                 "mesh": plug.mesh_path.replace("\\", "/"),
                 "texture": plug.texture_path.replace("\\", "/"),
             }
+            if plug.embedded_mesh_data:
+                record["fxg"] = stem
+            index[f"{race}_{grade}"] = record
 
     return index
+
+
+def write_fx_guide(plug: N3CPlug, stem: str, out_dir: Path) -> bool:
+    """The plug's embedded sheet, in the same negate-X space as the visible gauntlet glb."""
+    guide = plug.embedded_mesh_data
+    if not guide:
+        return False
+    pos, nrm, uv, idx = n3_convert.decode_part(guide)
+    guide_dir = out_dir / "fxguide"
+    guide_dir.mkdir(parents=True, exist_ok=True)
+    source = {
+        "tid": "",
+        "name": f"{stem}_fxguide",
+        "render_flags": 0,
+        "src_blend": 5,
+        "dest_blend": 6,
+        "diffuse": [1.0, 1.0, 1.0, 1.0],
+        "emissive": [0.0, 0.0, 0.0],
+        "pivot": [0.0, 0.0, 0.0],
+    }
+    n3_convert.build_glb(str(guide_dir / f"{stem}.glb"), [(source, pos, nrm, uv, idx)], {})
+    return True
+
+
+def bake_guides_only(out_dir: Path) -> int:
+    """Write fxguide glbs and stamp fxg onto the existing index. Leaves the visible meshes alone."""
+    index_path = out_dir / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    resolver = AssetResolver(str(bake_players.KO_DIR))
+    written: set[str] = set()
+    stamped = 0
+    for key, record in index.items():
+        race_s, grade_s = key.split("_", 1)
+        plug_path = f"Item\\ClanAddOn_{int(race_s):03d}_{int(grade_s)}.n3cplug"
+        blob = resolver.read(plug_path)
+        if not blob:
+            print(f"  missing {plug_path}")
+            continue
+        plug = N3CPlug.from_reader(BinaryReader(blob))
+        stem = record["stem"]
+        if not plug.embedded_mesh_data:
+            record.pop("fxg", None)
+            continue
+        if stem not in written:
+            write_fx_guide(plug, stem, out_dir)
+            written.add(stem)
+        record["fxg"] = stem
+        stamped += 1
+    index_path.write_text(json.dumps(index, indent=1), encoding="utf-8")
+    print(f"{stamped} plugs stamped, {len(written)} guide meshes -> {out_dir / 'fxguide'}")
+    return 0 if stamped else 1
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--guides-only", action="store_true")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
+    if args.guides_only:
+        return bake_guides_only(out_dir)
     index = bake(out_dir)
     if not index:
         print("nothing baked")
