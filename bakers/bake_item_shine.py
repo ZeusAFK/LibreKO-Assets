@@ -1,8 +1,7 @@
 """Bake the high-grade shine level for every enchantable item.
 
-`Item_Ext_<cat>` **col12** is a single unified "grade value" that already encodes the shine tier for
-both the normal (+1..+10) and the Rebirth/Reverse (+1..+30) ladders, so no per-category special cases
-are needed. Verified across 11 categories:
+Generic upgrade rows (rarity 5) and the Rebirth/Reverse ladders store the shine tier in
+`Item_Ext_<cat>` **col12**:
 
     grade                        col12      shine level
     +6 and below                 <= 5000    none
@@ -11,10 +10,9 @@ are needed. Verified across 11 categories:
     +9   == reverse +11..+20      8000       3   blinks clearly
     +10  == reverse +21..+30      9000+      4   continuous
 
-The normal/reverse equivalence is the one documented on the KO wiki "Upgrading" page, and col12 holds
-the *same* value on both sides of it (a +30 reverse and a +10 normal are both 9000), which is why one
-threshold table covers every family -- including categories that repeat the 30-step ladder once per
-element (cat 32 = Light 1..30, Frozen 31..60, named Glave(+N) 61..90).
+Named uniques (rarity 4) keep their real durability in that same column, so a +0 Chitin Shield
+(durability 8000) would shine like a +9. Their upgrade step is the `(+N)` in the row name, and
+the same +7..+10 tiers apply. A unique with no `(+N)` does not shine.
 
 Output <output>/items/shine.json:
     { "cats": { "<cat>": { "<ext>": <level 1..4> } } }
@@ -34,8 +32,9 @@ from _paths import ko as _ko, assets as _assets  # noqa: E402
 DATA = str(_ko() / "Data")
 OUT = str(_assets() / "items" / "shine.json")
 
-C_EXT, C_GRADE_VALUE = 0, 12
+C_EXT, C_NAME, C_RARITY, C_GRADE_VALUE = 0, 1, 7, 12
 MAX_LEVEL = 4
+UNIQUE = 4
 GRADE_THRESHOLDS = ((9000, 4), (8000, 3), (7000, 2), (6000, 1))
 
 
@@ -46,6 +45,39 @@ def shine_level(grade_value):
         if grade_value >= floor:
             return level
     return 0
+
+
+def plus_in_name(name):
+    if not isinstance(name, str) or not name.endswith(")"):
+        return 0
+    open_at = name.rfind("(+")
+    if open_at < 0:
+        return 0
+    try:
+        return int(name[open_at + 2:-1])
+    except ValueError:
+        return 0
+
+
+def shine_from_plus(plus):
+    if plus >= 10:
+        return 4
+    if plus == 9:
+        return 3
+    if plus == 8:
+        return 2
+    if plus == 7:
+        return 1
+    return 0
+
+
+def row_shine(row):
+    rarity = row[C_RARITY] if len(row) > C_RARITY and isinstance(row[C_RARITY], int) else 0
+    if rarity == UNIQUE:
+        name = row[C_NAME] if len(row) > C_NAME else ""
+        return shine_from_plus(plus_in_name(name))
+    grade = row[C_GRADE_VALUE] if len(row) > C_GRADE_VALUE else 0
+    return shine_level(grade)
 
 
 def main():
@@ -67,7 +99,7 @@ def main():
             continue
         rows = {}
         for r in table.rows:
-            level = shine_level(r[C_GRADE_VALUE])
+            level = row_shine(r)
             if level:
                 rows[str(r[C_EXT])] = level
                 hist[level] += 1
