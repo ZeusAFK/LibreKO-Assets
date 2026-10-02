@@ -32,9 +32,8 @@ STAGES: tuple[Stage, ...] = (
         (
             Step(
                 "items", "bake_items",
-                note="must precede weapons and shine: both join against items.json",
+                note="must precede weapons: they join against items.json",
             ),
-            Step("item-shine", "bake_item_shine"),
             Step("achievements", "bake_achievements"),
             Step("achievement-titles", "bake_achievement_titles"),
         ),
