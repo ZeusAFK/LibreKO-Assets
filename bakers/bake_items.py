@@ -85,6 +85,8 @@ TEXTS = KO_DATA / "Texts_us.tbl"
 PIECE_EXCHANGE = KO_DATA / "piece_Exchange_us.tbl"
 ATTENDANCE = KO_DATA / "Attendance.tbl"
 UI_HELP = KO_DATA / "UI_Help_us.tbl"
+SET_ITEM = KO_DATA / "set_item_us.tbl"
+ITEM_OP = KO_DATA / "item_op.tbl"
 UI_HDR = KO_ROOT / "UI" / "ui.hdr"
 UI_SRC = KO_ROOT / "UI" / "ui.src"
 OUT_DIR = _assets() / "items"
@@ -270,6 +272,10 @@ def _ext_bonuses(row) -> dict[str, int]:
         "iceDamage": _cs(row, 23),
         "lightningDamage": _cs(row, 24),
         "poisonDamage": _cs(row, 25),
+        "hpDrain": _cs(row, 26),
+        "mpDamage": _cs(row, 27),
+        "mpDrain": _cs(row, 28),
+        "mirror": _cs(row, 29),
         "durationBonus": _cs(row, 12),
         "reqStrBonus": _cs(row, 49),
         "reqStaBonus": _cs(row, 50),
@@ -321,6 +327,47 @@ def bake_extensions() -> dict[str, dict[str, dict]]:
             cat_map[str(ext_id)] = rec
         if cat_map:
             out[str(cat)] = cat_map
+    return out
+
+
+# set_item_us.tbl: one row per set bonus (id = race * 10000 + worn-slot mask) or per cospre item (id = item id).
+SET_ITEM_FIELDS = {
+    "ac": 2, "hp": 3, "mp": 4,
+    "str": 5, "sta": 6, "dex": 7, "int": 8, "cha": 9,
+    "fireR": 10, "coldR": 11, "lightningR": 12, "poisonR": 13, "magicR": 14, "curseR": 15,
+    "xpPct": 16, "noahPct": 17, "apPct": 18,
+    "apClass": 19, "apClassPct": 20, "acClass": 21, "acClassPct": 22,
+    "maxWeight": 23, "np": 24, "ap": 25,
+}
+SET_ITEM_NO_CLASS = 255
+
+
+def bake_set_items() -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for r in read_tbl(str(SET_ITEM)).rows:
+        if not r or not isinstance(r[0], int):
+            continue
+        rec: dict[str, object] = {}
+        name = _clean_text(_s(r, 1))
+        if name:
+            rec["name"] = name
+        for key, col in SET_ITEM_FIELDS.items():
+            value = _cs(r, col)
+            if key in ("apClass", "acClass") and value == SET_ITEM_NO_CLASS:
+                continue
+            if value != 0:
+                rec[key] = value
+        out[str(r[0])] = rec
+    return out
+
+
+def bake_item_ops() -> dict[str, list]:
+    """item_op.tbl: item id, trigger (13 = when struck), skill id, cast chance %."""
+    out: dict[str, list] = {}
+    for r in read_tbl(str(ITEM_OP)).rows:
+        if len(r) < 4 or not all(isinstance(v, int) for v in r[:4]):
+            continue
+        out.setdefault(str(r[0]), []).append([r[1], r[2], r[3]])
     return out
 
 
@@ -546,6 +593,8 @@ def main() -> int:
             "_pieces": bake_piece_exchange(items),
             "_help": bake_ui_help(),
             "_attendance": bake_attendance(),
+            "_sets": bake_set_items(),
+            "_ops": bake_item_ops(),
         }
         baked.update(items)
         (OUT_DIR / "items.json").write_text(json.dumps(baked, separators=(",", ":")))

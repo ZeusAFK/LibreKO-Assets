@@ -31,6 +31,7 @@ class AssetResolver:
         self.game_dir = Path(game_dir)
         self._archives: dict[str, HDRArchive] = {}
         self._archive_index: dict[str, tuple[str, HDREntry]] = {}
+        self._entries_by_archive: dict[str, dict[str, HDREntry]] = {}
 
     def _ensure_archives_loaded(self):
         if self._archive_index:
@@ -41,12 +42,24 @@ class AssetResolver:
                 try:
                     archive = read_hdr(str(hdr_path))
                     self._archives[prefix] = archive
+                    own = self._entries_by_archive.setdefault(prefix, {})
                     for entry in archive.entries:
                         # Index by the entry name (lowercase, forward slashes)
                         key = entry.name.lower().replace("\\", "/")
                         self._archive_index[key] = (prefix, entry)
+                        own.setdefault(key, entry)
                 except Exception:
                     pass
+
+    def _folder_entry(self, key: str) -> Optional[tuple[str, HDREntry]]:
+        folder, _, name = key.rpartition("/")
+        entry = self._entries_by_archive.get(folder, {}).get(name)
+        return (folder, entry) if entry is not None else None
+
+    def _read_entry(self, prefix: str, entry: HDREntry) -> bytes:
+        with open(str(self._archives[prefix].src_path), "rb") as f:
+            f.seek(entry.offset)
+            return f.read(entry.size)
 
     def resolve_path(self, ref_path: str) -> Optional[Path]:
         """Resolve a reference path to a loose file on disk. Returns None if not found."""
@@ -80,21 +93,17 @@ class AssetResolver:
         # Try archives
         self._ensure_archives_loaded()
         key = ref_path.lower().replace("\\", "/")
+        own = self._folder_entry(key)
+        if own is not None:
+            return self._read_entry(*own)
         if key in self._archive_index:
-            prefix, entry = self._archive_index[key]
-            archive = self._archives[prefix]
-            with open(str(archive.src_path), "rb") as f:
-                f.seek(entry.offset)
-                return f.read(entry.size)
+            return self._read_entry(*self._archive_index[key])
 
         # Try without the directory prefix (e.g., 'item\foo.dxt' -> 'foo.dxt')
         basename = key.split("/")[-1]
         for full_key, (prefix, entry) in self._archive_index.items():
             if full_key.endswith("/" + basename) or full_key == basename:
-                archive = self._archives[prefix]
-                with open(str(archive.src_path), "rb") as f:
-                    f.seek(entry.offset)
-                    return f.read(entry.size)
+                return self._read_entry(prefix, entry)
 
         return None
 
@@ -105,7 +114,7 @@ class AssetResolver:
             return True
         self._ensure_archives_loaded()
         key = ref_path.lower().replace("\\", "/")
-        return key in self._archive_index
+        return self._folder_entry(key) is not None or key in self._archive_index
 
     def list_archive(self, archive_name: str, pattern: str = "*") -> list[HDREntry]:
         """List entries in a specific archive."""
