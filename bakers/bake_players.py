@@ -155,6 +155,34 @@ def item_model_path(item_id: int, race: int, is_weapon: bool):
     return f"Item\\{v // 10000000}_{mid:04d}_{(v // 10) % 100:02d}_{v % 10}{ext}"
 
 
+PART_PREFIX_SPAN = 10_000
+PART_PREFIX_DIGITS = 100
+ORG_SALE_TYPE = 21
+SALE_TYPE_UNPREFIXED = 2
+
+
+def armor_part_prefix(item_id: int) -> int:
+    """A worn part is named NN_<resource stem>, NN = item id / 10000 % 100,
+    unless the item's sale type is 2; the plain name is the fallback."""
+    base = _item_rows().get(item_id // 1000 * 1000)
+    if base is not None and int(base[ORG_SALE_TYPE] or 0) == SALE_TYPE_UNPREFIXED:
+        return 0
+    return item_id // PART_PREFIX_SPAN % PART_PREFIX_DIGITS
+
+
+def armor_part_path(item_id: int, race: int, exists):
+    plain = item_model_path(item_id, race, is_weapon=False)
+    if not plain:
+        return None
+    prefix = armor_part_prefix(item_id)
+    if prefix:
+        folder, _, name = plain.rpartition("\\")
+        prefixed = f"{folder}\\{prefix:02d}_{name}"
+        if exists(prefixed):
+            return prefixed
+    return plain
+
+
 def _default_body(row, face, hair):
     """The race default-look part list (joint+anim+4 body parts+face+hair)."""
     out = []
@@ -176,7 +204,7 @@ def _equipped_body(row, race, face, gear, resolver):
     used = 0
     for gear_i, default_col in BODY_SLOTS:
         item = gear[gear_i] if gear_i < len(gear) else 0
-        armor = item_model_path(item, race, is_weapon=False)
+        armor = armor_part_path(item, race, resolver.exists)
         if armor and resolver.read(armor):
             parts.append(armor)
             used += 1

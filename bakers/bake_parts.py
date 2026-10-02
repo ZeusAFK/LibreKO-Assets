@@ -8,7 +8,8 @@ shared Skeleton3D when grafted. One MeshInstance3D + the rig skeleton, no animat
 
 Runtime resolution (mirrors World.cs):
   - armor: item base id -> dwIDResrc (Item_Org_us.tbl) -> stem
-           f"{R//1e7}_{(R//1000)%1e4 + race}_{(R//10)%100}_{R%10}"  -> items/armor/<stem>.glb
+           f"{R//1e7}_{(R//1000)%1e4 + race}_{(R//10)%100}_{R%10}"  -> items/armor/<stem>.glb,
+           or f"{id//10000%100:02d}_<stem>" when the archive has it (bake_players.armor_part_prefix)
   - face/hair: race face/hair base name (UPC_DefaultLooks) + 2-digit index
            e.g. upc_el_rf_face07 -> characters/upc_el_rf_face07.glb  (co-located with body rigs)
 Indexes: items/armor/index.json = {items:{baseId:resrc}}; characters/faces.json = {races:{race:{facePart,hairPart}}}.
@@ -118,7 +119,7 @@ def main():
         for item in items:
             # Keep the exact item ID. Item_Ext may replace dwIDResrc, so two
             # extensions of one base item can legitimately graft different parts.
-            path = bake_players.item_model_path(item, race, is_weapon=False)
+            path = bake_players.armor_part_path(item, race, have)
             if not have(path):
                 continue
             if _bake_part(_part_stem(path), joint, path, resolver, armor_out, baked):
