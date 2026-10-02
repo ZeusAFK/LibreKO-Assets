@@ -13,6 +13,10 @@ is per race -- each race carries its own local transform onto the same nation me
 there are 35 plugs for 10 meshes. Textures are whatever the plug names: grades 4 and 5 have their
 own, the lower three share a clan texture.
 
+Every plug also embeds an FX guide mesh, one per nation mesh. The client draws the clan rank
+flame (`clan_rank_1`) over that guide for a clan ranked 1 to 5, the same way it draws a weapon
+glow. It is baked to `fxguide/<stem>.glb` and named by the plug's `fxg`.
+
 Usage:
     python bake.py --only bake_clan_gauntlet
 """
@@ -37,12 +41,37 @@ from _paths import ko as _ko, assets as _assets  # noqa: E402
 DEFAULT_OUT = _assets() / "items" / "clanaddon"
 RACES = (1, 2, 3, 4, 11, 12, 13)
 GRADES = (1, 2, 3, 4, 5)
+GUIDE_DIR = "fxguide"
+
+
+def _bake_guide(plug: N3CPlug, stem: str, guide_dir: Path, baked: set[str]) -> str | None:
+    if stem in baked:
+        return stem
+    guide = plug.embedded_mesh_data
+    if not guide:
+        return None
+    gpos, gnrm, guv, gidx = n3_convert.decode_part(guide)
+    source = {
+        "tid": "",
+        "name": f"{stem}_fxguide",
+        "render_flags": 0,
+        "src_blend": 5,
+        "dest_blend": 6,
+        "diffuse": [1.0, 1.0, 1.0, 1.0],
+        "emissive": [0.0, 0.0, 0.0],
+        "pivot": [0.0, 0.0, 0.0],
+    }
+    guide_dir.mkdir(parents=True, exist_ok=True)
+    n3_convert.build_glb(str(guide_dir / f"{stem}.glb"), [(source, gpos, gnrm, guv, gidx)], {})
+    baked.add(stem)
+    return stem
 
 
 def bake(out_dir: Path) -> dict:
     resolver = AssetResolver(str(bake_players.KO_DIR))
     index: dict[str, dict] = {}
     stem_cache: dict[str, tuple[bool, int]] = {}
+    baked_guides: set[str] = set()
 
     for race in RACES:
         for grade in GRADES:
@@ -86,6 +115,9 @@ def bake(out_dir: Path) -> dict:
                 "mesh": plug.mesh_path.replace("\\", "/"),
                 "texture": plug.texture_path.replace("\\", "/"),
             }
+            guide_stem = _bake_guide(plug, stem, out_dir / GUIDE_DIR, baked_guides)
+            if guide_stem:
+                index[f"{race}_{grade}"]["fxg"] = guide_stem
 
     return index
 
@@ -108,6 +140,7 @@ def main() -> int:
     print(f"  {len(meshes)} meshes: {', '.join(meshes)}")
     print(f"  joint(s): {joints}")
     print(f"  untextured: {[k for k, e in index.items() if not e['tex']] or 'none'}")
+    print(f"  fx guides: {sum(1 for e in index.values() if 'fxg' in e)}/{len(index)}")
     return 0
 
 
