@@ -125,6 +125,7 @@ STAGES: tuple[Stage, ...] = (
                 "skills", "bake_skills",
                 note="after fx: effect ids only resolve against bundles already baked",
             ),
+            Step("disguise", "bake_disguise", note="the forms a Transformation Totem or Scroll lists"),
         ),
     ),
     Stage(
@@ -134,6 +135,9 @@ STAGES: tuple[Stage, ...] = (
             Step("cursors", "bake_cursors"),
             Step("warps", "bake_warps"),
             Step("target-symbol", "bake_target_symbol"),
+            Step("fortune", "bake_fortune", note="the tarot table and its card art"),
+            Step("special-auction", "bake_special_auction", note="Akara's Altar lot schedule"),
+            Step("item-combine", "bake_item_combine", note="combination recipes and their classes"),
         ),
     ),
     Stage(

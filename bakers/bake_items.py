@@ -528,6 +528,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--probe", type=int, default=0, help="decode only N sample icons, no JSON")
     ap.add_argument("--json-only", action="store_true", help="write items.json only; skip icon archive/decode")
+    ap.add_argument("--icons-only", action="store_true", help="decode missing icons only; leave items.json untouched")
     args = ap.parse_args()
 
     rows = [r for r in read_tbl(str(ITEM_ORG)).rows if r and isinstance(r[C_ID], int)]
@@ -584,7 +585,12 @@ def main() -> int:
         if resrc > 0:
             resrcs.setdefault(resrc, iid)
 
-    if not args.probe:
+    if args.icons_only:
+        for ext_rows in bake_extensions().values():
+            for ext in ext_rows.values():
+                if ext.get("icon"):
+                    resrcs.setdefault(ext["icon"], 0)
+    elif not args.probe:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         baked: dict[str, object] = {
             "_texts": bake_texts(),
@@ -597,6 +603,10 @@ def main() -> int:
             "_ops": bake_item_ops(),
         }
         baked.update(items)
+        for ext_rows in baked["_ext"].values():
+            for ext in ext_rows.values():
+                if ext.get("icon"):
+                    resrcs.setdefault(ext["icon"], 0)
         (OUT_DIR / "items.json").write_text(json.dumps(baked, separators=(",", ":")))
         print(f"[items] wrote items.json ({len(items)} items, {len(baked['_ext'])} ext categories)")
         if args.json_only:

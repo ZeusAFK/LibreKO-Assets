@@ -7,7 +7,7 @@ from enum import IntEnum
 
 
 class ColType(IntEnum):
-    SBYTE = 1; BYTE = 2; SHORT = 3; INT = 5; UINT = 6; STRING = 7; FLOAT = 8; INT64 = 10
+    SBYTE = 1; BYTE = 2; SHORT = 3; USHORT = 4; INT = 5; UINT = 6; STRING = 7; FLOAT = 8; DOUBLE = 9; INT64 = 10
 
 
 @dataclass
@@ -177,10 +177,12 @@ def _parse_table(name, data):
             if ct == ColType.SBYTE: row.append(struct.unpack_from('<b',data,off)[0]); off+=1
             elif ct == ColType.BYTE: row.append(data[off]); off+=1
             elif ct == ColType.SHORT: row.append(ri16())
+            elif ct == ColType.USHORT: row.append(struct.unpack_from('<H',data,off)[0]); off+=2
             elif ct == ColType.INT: row.append(ri32())
             elif ct == ColType.INT64: row.append(ri64())
             elif ct == ColType.UINT: row.append(ru32())
             elif ct == ColType.FLOAT: row.append(rf32())
+            elif ct == ColType.DOUBLE: row.append(struct.unpack_from('<d',data,off)[0]); off+=8
             elif ct == ColType.STRING: row.append(rstr())
             else: row.append(None)
         rows.append(row)
