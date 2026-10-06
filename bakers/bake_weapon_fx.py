@@ -13,12 +13,12 @@ which are COMBAT effects -- not baked here). Other non-zero col4 (32xxx/39xxx/40
 resolved generically through fx.tbl.
 
 Output `<output>/items/weapon/glow.json`:
-    { "weaponCat": { "<baseId>": <cat> },              # only baked weapons (items/weapon/index.json)
+    { "weaponCat": { "<baseId>": <cat> },              # baked weapons: index.json + visual_aliases.json
       "cats":      { "<cat>": { "<ext>": "<fxName>" } } # non-zero col4 that resolve to a BAKED fx }
 Runtime (World.AttachWeapons): cat = weaponCat[base]; name = cats[cat][id%1000]; Fx.Spawn(name, weapon).
 
 Usage:
-    python bake.py --only bake_weapon_fx
+    python bake.py --only weapon-fx
 """
 from __future__ import annotations
 
@@ -67,6 +67,9 @@ def main() -> int:
         print("run bake_weapons.py first (no items/weapon/index.json)", file=sys.stderr)
         return 2
     weapon_ids = {int(k) for k in json.loads(index_path.read_text())}
+    aliases_path = WEAPON_DIR / "visual_aliases.json"
+    if aliases_path.exists():
+        weapon_ids |= {int(k) for k in json.loads(aliases_path.read_text())}
 
     # fx.tbl: fxId -> baked fx stem (skip ids whose fx isn't baked)
     fx_stem = {}

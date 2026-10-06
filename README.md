@@ -54,7 +54,7 @@ Stages run in order, and the order matters — later stages read what earlier on
 | `terrain` | heightmaps, ground surface, water, collision |
 | `objects` | placed world geometry and standalone props |
 | `characters` | race bodies, armor parts, mobs, capes, wings, hand effects |
-| `weapons` | weapon meshes and the enchant-guide chain |
+| `weapons` | weapon meshes, the enchant-guide chain and the swing-trail textures |
 | `fx` | effect descriptors, ids and placements |
 | `skills` | skill presentation |
 | `ui` | cursors, warp data, target symbol |

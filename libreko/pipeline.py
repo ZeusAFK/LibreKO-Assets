@@ -96,6 +96,7 @@ STAGES: tuple[Stage, ...] = (
             Step("weapon-anchor", "bake_weapon_anchor", note="adds fxg/fxp/fxr to weapon/index.json"),
             Step("visual-aliases", "bake_item_visual_aliases", note="adds visual aliases to weapon/index.json"),
             Step("clan-gauntlet", "bake_clan_gauntlet"),
+            Step("weapon-trail", "bake_weapon_trail", note="the five swing-trail textures, fx/tex/weapon_trail*.png"),
         ),
     ),
     Stage(
@@ -109,7 +110,7 @@ STAGES: tuple[Stage, ...] = (
                 note="needs the terrain stage: its zone list comes from the baked terrain dirs",
             ),
             Step("weapon-fx", "bake_weapon_fx",
-                 note="after fx: reads weapon/index.json and keeps only effects already baked, writes glow.json"),
+                 note="after fx: reads weapon/index.json and visual_aliases.json, keeps only effects already baked, writes glow.json"),
             Step("hand-fx", "bake_hand_fx",
                  note="after fx: a glove effect whose descriptor is not baked yet is skipped"),
             Step("npc-role-fx", "bake_npc_role_fx",
