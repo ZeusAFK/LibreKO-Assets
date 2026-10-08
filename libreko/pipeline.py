@@ -34,6 +34,8 @@ STAGES: tuple[Stage, ...] = (
                 "items", "bake_items",
                 note="must precede weapons: they join against items.json",
             ),
+            Step("item-inventory", "bake_item_inventory",
+                 note="after items: optional exact-ID weight and stackability from server seeds"),
             Step("achievements", "bake_achievements"),
             Step("achievement-titles", "bake_achievement_titles"),
         ),
