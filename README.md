@@ -35,7 +35,7 @@ A full run takes a while — the character, object and sound stages dominate. Us
 | `--skip NAME ...` | run everything except these |
 | `--keep-going` | continue past a failing step instead of stopping |
 | `--verbose` | stream each step's own output |
-| `--server-data DIR` | the LibreKO server's `Seed/Data`; skills take their buff and cost fields from it. Found automatically when the output is `Client/assets` inside a LibreKO checkout |
+| `--server-data DIR` | the LibreKO server's `Seed/Data`; skills take their buff and cost fields from it, and inventory metadata uses its expanded item rows. Found automatically when the output is `Client/assets` inside a LibreKO checkout |
 
 ```
 python bake.py --ko ... --out ./assets --only terrain characters
@@ -49,7 +49,7 @@ Stages run in order, and the order matters — later stages read what earlier on
 | Stage | Produces |
 |---|---|
 | `tables` | game tables as JSON |
-| `items` | item records, icons, shine data, achievements |
+| `items` | item records, icons, shine data, optional inventory metadata, achievements |
 | `quests` | quest records and dialogue |
 | `terrain` | heightmaps, ground surface, water, collision |
 | `objects` | placed world geometry and standalone props |
@@ -76,6 +76,25 @@ A third dependency crosses stages: `fx-placements` builds its zone list from the
 baked, so it produces nothing if `terrain` has not run. This is why `--only fx` against a fresh
 output folder reports no zones — run the whole pipeline once, then narrow with `--only` afterwards.
 
+The `item-inventory` step follows `items` and writes `items/inventory.json`. With server data,
+it compares every exact ID in `Items.slot*.json` with the retail catalog's exact/base lookup.
+Only differing or unresolved IDs receive `[weight, countable]` overrides; `countable` keeps its
+original numeric value. The catalog uses `schemaVersion: 1` and fingerprints both inputs. It
+does not change `items.json` or the server seeds. Without server item seeds it warns and preserves
+any existing catalog.
+
+Regenerate only this companion, without rebaking the retail items, or check it without writing:
+
+```
+python bake.py --ko ... --out ./assets --server-data ../LibreKO/Server/LibreKO.Game/Seed/Data --only item-inventory --skip imports
+python bakers/bake_item_inventory.py --out ./assets --server-data ../LibreKO/Server/LibreKO.Game/Seed/Data --check
+python -m unittest discover -s tests
+```
+
+A freshness check fails if the companion is missing, differs from its inputs, or server item
+seeds are unavailable. Weights must fit a nonnegative signed short, and stackability values must
+fit an unsigned byte; invalid server rows fail before the existing catalog is replaced.
+
 ## Layout
 
 ```
@@ -95,6 +114,9 @@ The pipeline converts what the client itself ships. Data that a server owns — 
 cast times, drop rates — is deliberately not produced here; skills are baked for presentation
 only (names, icons, animations, effects) and the gameplay numbers come from whatever server you
 connect to.
+
+The optional inventory companion mirrors server weight and stackability so client inventory
+previews can use the same constraints. Its generated overrides are not a source of server rules.
 
 The `quests` stage is transitional. Quest definitions are moving to the server, which will send
 the client a ready-made view of text, objectives and rewards rather than the client reading baked
