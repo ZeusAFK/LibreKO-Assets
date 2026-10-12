@@ -153,6 +153,7 @@ def _bake_one(item_id, resolver, out_dir, stem_cache, archive_keys):
         "mesh": plug.mesh_path.replace("\\", "/"),
         "texture": plug.texture_path.replace("\\", "/"),
         **_trace_fields(plug),
+        **_tail_fields(plug),
     }
 
 
@@ -168,27 +169,69 @@ def _trace_fields(plug) -> dict:
     }
 
 
+TAIL_KEYS = ("ver", "race")
+
+
+def _tail_fields(plug) -> dict:
+    """The plug format version and, from version 2, its eight race placement blocks
+    (default, race 1, 2, 3, 4/5/13, 11, 12, 6/14) in the same Godot space as pos/quat."""
+    if plug.version <= 0:
+        return {}
+    fields = {"ver": int(plug.version)}
+    if plug.race_blocks:
+        fields["race"] = [_block_fields(block) for block in plug.race_blocks]
+    return fields
+
+
+def _block_fields(block) -> dict:
+    gpos, gquat = _convert_transform(block.position, block.rot_matrix)
+    return {"pos": gpos, "quat": gquat, "scale": list(block.scale)}
+
+
+def _read_indexed_plug(rec, resolver, archive_keys):
+    path = rec.get("plug")
+    if not path:
+        return None
+    path = path.replace("/", "\\")
+    if path.split("\\")[-1].lower() not in archive_keys:
+        return None
+    blob = resolver.read(path)
+    if not blob:
+        return None
+    try:
+        return N3CPlug.from_reader(BinaryReader(blob))
+    except Exception:
+        return None
+
+
 def _amend_traces(index, resolver, archive_keys) -> int:
     """Add only the trace fields to an existing index, leaving every other field
     (including bake_weapon_anchor's fxp/fxr/fxg) untouched."""
     changed = 0
     for key, rec in index.items():
-        path = rec.get("plug")
-        if not path:
-            continue
-        path = path.replace("/", "\\")
-        if path.split("\\")[-1].lower() not in archive_keys:
-            continue
-        blob = resolver.read(path)
-        if not blob:
-            continue
-        try:
-            plug = N3CPlug.from_reader(BinaryReader(blob))
-        except Exception:
+        plug = _read_indexed_plug(rec, resolver, archive_keys)
+        if plug is None:
             continue
         for k in ("trstep", "trcol", "tr0", "tr1"):
             rec.pop(k, None)
         fields = _trace_fields(plug)
+        rec.update(fields)
+        if fields:
+            changed += 1
+    return changed
+
+
+def _amend_tails(index, resolver, archive_keys) -> int:
+    """Add only the plug version and race blocks to an existing index, leaving every
+    other field untouched."""
+    changed = 0
+    for key, rec in index.items():
+        plug = _read_indexed_plug(rec, resolver, archive_keys)
+        if plug is None:
+            continue
+        for k in TAIL_KEYS:
+            rec.pop(k, None)
+        fields = _tail_fields(plug)
         rec.update(fields)
         if fields:
             changed += 1
@@ -202,6 +245,8 @@ def main():
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--trace-only", action="store_true",
                     help="amend the existing index with the swing-trail fields; rebuild nothing")
+    ap.add_argument("--tail-only", action="store_true",
+                    help="amend the existing index with the plug version and race blocks; rebuild nothing")
     args = ap.parse_args()
     out_dir = Path(args.out)
     resolver = AssetResolver(KO_DIR)
@@ -214,6 +259,15 @@ def main():
         n = _amend_traces(index, resolver, archive_keys)
         index_path.write_text(json.dumps(index, indent=0))
         print(f"[weapons] swing trail: {n}/{len(index)} items carry a trace -> {index_path}")
+        return 0
+
+    if args.tail_only:
+        index_path = out_dir / "index.json"
+        index = json.loads(index_path.read_text())
+        n = _amend_tails(index, resolver, archive_keys)
+        index_path.write_text(json.dumps(index, indent=0))
+        blocks = sum(1 for rec in index.values() if "race" in rec)
+        print(f"[weapons] plug tail: {n}/{len(index)} items carry a version, {blocks} race blocks -> {index_path}")
         return 0
 
     if args.all:

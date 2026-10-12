@@ -9,7 +9,7 @@ Binary layout (after the N3 name string):
   [int32] minNumIndices
   [VertexT1[maxNumVertices]]  — 32 bytes each (pos + normal + uv)
   [uint16[maxNumIndices]]     — triangle indices
-  [EdgeCollapse[numCollapses]] — 20 bytes each (if numCollapses > 0)
+  [EdgeCollapse[numCollapses]] — 24 bytes each (if numCollapses > 0)
   [int32[totalIndexChanges]]   — (if totalIndexChanges > 0)
   [int32] lodCtrlCount
   [LODCtrlValue[lodCtrlCount]] — 8 bytes each (if count > 0)
@@ -39,16 +39,18 @@ class Vertex:
 
 @dataclass
 class EdgeCollapse:
-    """Edge collapse record (20 bytes)."""
+    """Edge collapse record (24 bytes: five int32 and bShouldCollapse padded to 4)."""
     num_indices_to_lose: int
     num_indices_to_change: int
     num_vertices_to_lose: int
     index_changes_offset: int
     collapse_to: int
+    should_collapse: int = 0
 
     @classmethod
     def read(cls, r: BinaryReader) -> "EdgeCollapse":
-        return cls(r.read_int32(), r.read_int32(), r.read_int32(), r.read_int32(), r.read_int32())
+        return cls(r.read_int32(), r.read_int32(), r.read_int32(), r.read_int32(), r.read_int32(),
+                   r.read_uint32())
 
     def write(self, w: BinaryWriter):
         w.write_int32(self.num_indices_to_lose)
@@ -56,6 +58,7 @@ class EdgeCollapse:
         w.write_int32(self.num_vertices_to_lose)
         w.write_int32(self.index_changes_offset)
         w.write_int32(self.collapse_to)
+        w.write_uint32(self.should_collapse)
 
 
 @dataclass
