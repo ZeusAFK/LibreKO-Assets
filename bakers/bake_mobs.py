@@ -48,6 +48,11 @@ KO_DIR = str(_ko()
              else _ko())
 NPC_LOOKS = str(Path(KO_DIR) / "Data" / "NPC_Looks.tbl")
 DEFAULT_OUT = _assets() / "npcs"
+PLUG_SLOTS_JSON = "plug_slots.json"
+PLUGS_DIR = "plugs"
+PLUGS_SUFFIX = ".plugs.json"
+CHR_PLUG_EXT = ".n3chrplug"
+CHR_PLUG_IDLE_CLIP = "breath"
 TEX_MAX = 1024   # DEFAULT cap on texture dimension; override with --tex-max (KO/enhanced art is up to 2048)
 
 
@@ -186,6 +191,100 @@ def _fx_plug_only(row, resolver):
     if not blob:
         return None
     return N3FXPlug.from_reader(BinaryReader(blob))
+
+
+def _manifest(row, resolver):
+    strs = [c for c in row if isinstance(c, str) and c]
+    chr_path = next((c for c in strs if c.lower().endswith(".n3chr")), None)
+    blob = resolver.read(chr_path) if chr_path else None
+    return N3Chr.from_reader(BinaryReader(blob)) if blob else None
+
+
+def _plug_slots(row, resolver):
+    """Plug slots of an .n3chr look (retail re-allocates plugs to the manifest's count); None for a parts list."""
+    manifest = _manifest(row, resolver)
+    return len(manifest.plug_paths) if manifest is not None else None
+
+
+def _record_plug_slots(slots, mid, row, resolver):
+    try:
+        count = _plug_slots(row, resolver)
+    except Exception as e:
+        print(f"[mobs] {mid}: plug slots: {type(e).__name__}: {e}", file=sys.stderr)
+        count = None
+    if count is None:
+        slots.pop(str(mid), None)
+    else:
+        slots[str(mid)] = count
+
+
+def _bake_plug_model(plug_path, plug_blob, resolver, plugs_dir, baked):
+    import bake_weapons
+    import n3_convert
+    from kotools.character.cplug import N3CPlug, PLUGTYPE_NORMAL
+    from kotools.character.chrplug import N3ChrPlug
+
+    if plug_path.lower().endswith(CHR_PLUG_EXT):
+        plug = N3ChrPlug.from_reader(BinaryReader(plug_blob))
+        if not plug.chr_path:
+            return None
+        stem = n3_convert.safe_name(n3_convert.base(plug.chr_path))
+        if stem not in baked:
+            result, _ = bake_model(stem, [plug.chr_path], resolver, plugs_dir)
+            baked[stem] = result is not None
+        anim = CHR_PLUG_IDLE_CLIP
+    else:
+        plug = N3CPlug.from_reader(BinaryReader(plug_blob))
+        if plug.plug_type != PLUGTYPE_NORMAL or not plug.mesh_path:
+            return None
+        stem = n3_convert.safe_name(n3_convert.base(plug.mesh_path))
+        if stem not in baked:
+            mesh_blob = resolver.read(plug.mesh_path)
+            if mesh_blob:
+                pos, nrm, uv, idx = n3_convert.decode_part(mesh_blob)
+                tid, tex = bake_weapons._decode_texture(resolver, plug.texture_path)
+                plugs_dir.mkdir(parents=True, exist_ok=True)
+                n3_convert.build_glb(
+                    str(plugs_dir / f"{stem}.glb"),
+                    [(bake_weapons._material_source(plug, tid, stem), pos, nrm, uv, idx)],
+                    {tid: tex} if tid else {},
+                    texture_dir=plugs_dir / "tex",
+                    texture_uri_prefix="tex/",
+                )
+            baked[stem] = bool(mesh_blob)
+        anim = ""
+    if not baked[stem]:
+        return None
+    gpos, gquat = bake_weapons._convert_transform(plug.position, plug.rot_matrix)
+    return {"model": stem, "joint": plug.joint_index, "pos": gpos, "quat": gquat,
+            "scale": list(plug.scale), "anim": anim}
+
+
+def _bake_built_in_plugs(stem, row, resolver, out_dir, baked):
+    manifest = _manifest(row, resolver)
+    plugs = []
+    if manifest is not None:
+        for slot, plug_path in enumerate(manifest.plug_paths):
+            plug_blob = resolver.read(plug_path)
+            if not plug_blob:
+                continue
+            try:
+                record = _bake_plug_model(plug_path, plug_blob, resolver, out_dir / PLUGS_DIR, baked)
+            except Exception as e:
+                print(f"[mobs] {stem}: plug {plug_path}: {type(e).__name__}: {e}", file=sys.stderr)
+                continue
+            if record is not None:
+                plugs.append({"slot": slot, **record})
+    sidecar = out_dir / f"{stem}{PLUGS_SUFFIX}"
+    if plugs:
+        sidecar.write_text(json.dumps({"plugs": plugs}, separators=(",", ":")))
+    elif sidecar.exists():
+        sidecar.unlink()
+    return len(plugs)
+
+
+def _write_id_map(path: Path, mapping: dict) -> None:
+    path.write_text(json.dumps(dict(sorted(mapping.items(), key=lambda kv: int(kv[0]))), indent=0))
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +478,8 @@ def main():
     ap.add_argument("--tex-max", type=int, default=TEX_MAX,
                     help=f"max texture dimension (default {TEX_MAX}; 2048 keeps full KO/enhanced art)")
     ap.add_argument("--metadata-only", action="store_true",
-                    help="write .anim.json sidecars for already-baked indexed models; do not rebuild GLBs")
+                    help="write the sidecars and built-in plug models for already-baked indexed models; "
+                         "do not rebuild model GLBs")
     args = ap.parse_args()
 
     ids = list(args.models or [])
@@ -401,17 +501,6 @@ def main():
     out_dir = Path(args.out)
 
     # Human-readable filename per model; disambiguate ids that share a model name.
-    used, stems = {}, {}
-    for mid in ids:
-        row = looks.get(mid)
-        if row is None:
-            continue
-        stem = safe_name(_model_name(row) or f"mob_{mid}")
-        if used.get(stem, mid) != mid:
-            stem = f"{stem}_{mid}"
-        used[stem] = mid
-        stems[mid] = stem
-
     index_path = out_dir / "index.json"
     index = {}
     if index_path.exists():
@@ -419,6 +508,22 @@ def main():
             index = json.loads(index_path.read_text())
         except Exception:
             index = {}
+    used = {stem: int(mid) for mid, stem in index.items()}
+    stems = {}
+    for mid in ids:
+        row = looks.get(mid)
+        if row is None:
+            continue
+        stem = index.get(str(mid))
+        if stem is None:
+            stem = safe_name(_model_name(row) or f"mob_{mid}")
+            if used.get(stem, mid) != mid:
+                stem = f"{stem}_{mid}"
+            used[stem] = mid
+        stems[mid] = stem
+    slots_path = out_dir / PLUG_SLOTS_JSON
+    plug_slots = json.loads(slots_path.read_text()) if slots_path.exists() else {}
+    plug_models = {}
 
     made = skipped = 0
     for mid in ids:
@@ -428,9 +533,11 @@ def main():
             skipped += 1
             continue
         stem = stems[mid]
+        _record_plug_slots(plug_slots, mid, row, resolver)
         if args.metadata_only:
             try:
                 out_dir.mkdir(parents=True, exist_ok=True)
+                _bake_built_in_plugs(stem, row, resolver, out_dir, plug_models)
                 # The .n3fxplug sidecar is metadata too — regenerating it must not require
                 # rebuilding every GLB (the plug layout/scale fix applies to 267 shipped plugs).
                 try:
@@ -460,15 +567,17 @@ def main():
             skipped += 1
             continue
         index[str(mid)] = stem
+        _bake_built_in_plugs(stem, row, resolver, out_dir, plug_models)
         nbones, nskins, nclips, nbytes = res
         print(f"[mobs] {mid} -> {stem}.glb: bones={nbones} skins={nskins} clips={nclips} -> {nbytes}B")
         made += 1
 
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _write_id_map(slots_path, plug_slots)
     if args.metadata_only:
         print(f"[mobs] animation metadata: {made}/{len(ids)} -> {out_dir}")
         return 0 if made else 1
-    out_dir.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(dict(sorted(index.items(), key=lambda kv: int(kv[0]))), indent=0))
+    _write_id_map(index_path, index)
     print(f"[mobs] done {made}/{len(ids)} -> {out_dir}  (index: {len(index)} ids)")
     return 0
 
