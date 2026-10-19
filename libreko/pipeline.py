@@ -136,6 +136,7 @@ STAGES: tuple[Stage, ...] = (
             Step("warps", "bake_warps"),
             Step("target-symbol", "bake_target_symbol"),
             Step("rank-symbols", "bake_rank_symbols", note="the national-rank marks beside a ranked player's name"),
+            Step("hud-art", "bake_hud_art", note="the War Board buttons and the anger gauge sheet"),
             Step("fortune", "bake_fortune", note="the tarot table and its card art"),
             Step("special-auction", "bake_special_auction", note="Akara's Altar lot schedule"),
             Step("item-combine", "bake_item_combine", note="combination recipes and their classes"),
