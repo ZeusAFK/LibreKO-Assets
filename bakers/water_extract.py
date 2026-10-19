@@ -35,7 +35,7 @@ El Morad river around KO (456,570)). This version parses both sections determini
 fails (e.g. an unexpected lightmap section), it falls back to the old scan so it never regresses.
 
 Vertices stay in raw KO world space (same frame the server addresses entities -- validated:
-identity mapping puts every patch on its riverbed). The Godot client converts via Terrain.KoToWorld.
+identity mapping puts every patch on its riverbed). The Godot client converts via Terrain.MapToWorld.
 Default KO Zones dir matches tools/bake_terrain.py (<retail install>).
 """
 import math

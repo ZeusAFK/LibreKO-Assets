@@ -5,9 +5,12 @@ decoded JSON is then turned into native Godot binary .res resources by the C#
 tool (client/src/data/TblImport.cs). The runtime client never touches Python,
 the cipher, or the .tbl files -- only the baked .res.
 
+Each retail table is written under the name the client loads it by (TABLE_NAMES); a table
+without an entry keeps its retail stem.
+
 Usage:
     python bake.py --only bake_tables --data "<retail install>\\Data"
-    python bake.py --only bake_tables --data DIR --tables NPC_us mob_us MON
+    python bake.py --only bake_tables --data DIR --tables NPC_us mob_us
 """
 from __future__ import annotations
 
@@ -22,8 +25,11 @@ sys.path.insert(0, str(_TOOLS_DIR))
 from tbl_reader import read_tbl  # noqa: E402
 from _paths import ko as _ko, assets as _assets  # noqa: E402
 
-# Tables the client currently needs. Add more here as features require them.
-DEFAULT_TABLES = ["NPC_us", "mob_us", "MON"]
+TABLE_NAMES = {
+    "NPC_us": "npc_names",
+    "mob_us": "monster_names",
+}
+DEFAULT_TABLES = list(TABLE_NAMES)
 
 # JSON intermediate dir (build artifact; the .res files are the real output).
 OUT_DIR = _assets() / "tables"
@@ -69,7 +75,7 @@ def main() -> int:
             "column_types": [int(c) for c in t.column_types],
             "rows": [[_cell(v) for v in row] for row in t.rows],
         }
-        dst = out_dir / f"{stem}.json"
+        dst = out_dir / f"{TABLE_NAMES.get(stem, stem)}.json"
         dst.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         print(f"[bake] {stem}: rows={len(t.rows)} cols={len(t.column_types)} -> {dst}")
         ok += 1

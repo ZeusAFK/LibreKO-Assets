@@ -8,7 +8,7 @@ reads it via FileAccess -- no .gtd / cipher at run time.
 
 Coordinates are kept in KO world space (x east, y up, z north), exactly like
 placements.json: the client applies the handedness flip + terrain orientation through
-Terrain.KoToWorld at runtime, so Coord.cs stays the single KO<->Godot boundary and
+Terrain.MapToWorld at runtime, so Coord.cs stays the single KO<->Godot boundary and
 re-tuning the terrain never needs a re-bake. (Validated: the river vertices share the
 server's koX/koZ frame -- identity mapping puts every patch on its riverbed.)
 

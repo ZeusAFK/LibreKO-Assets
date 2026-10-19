@@ -5,7 +5,7 @@ Renders the zone's own GTT tiles verbatim into a pair of files:
     <output>/terrain/<zone>/tiles.png   original GTT tiles, 128px, vertical strip atlas
     <output>/terrain/<zone>/splat.png   per-cell layer indices + stamp directions
 
-Read at runtime by client/src/Terrain/KoGroundTex.cs — the only producer of the ground textures the
+Read at runtime by client/src/Terrain/GroundTextures.cs — the only producer of the ground textures the
 client renders.
 
 splat.png encoding (RGBA8, one texel per cell):
@@ -194,7 +194,7 @@ def bake_zone(zone: str, dtex_index: dict, gtt_cache: dict, verify: bool) -> dic
     out.mkdir(parents=True, exist_ok=True)
     atlas_img.save(tiles_png)
     splat_img.save(splat_png)
-    # Ship both RAW: KoGroundTex reads them via FileAccess, so a normal texture import would
+    # Ship both RAW: GroundTextures reads them via FileAccess, so a normal texture import would
     # leave only a .ctex in the exported PCK and the ground would silently fall back to the
     # height tint. Every other terrain asset uses the same keep import.
     _write_keep_import(tiles_png)

@@ -23,7 +23,7 @@ The slot index is the join key: slot i's effect belongs to object i. The composi
 PLAIN VECTOR ADDITION of the object's position and the slot offset — no object rotation,
 no object scale, no matrix (see `_compose_world`). We do it here in KO space and emit an
 ABSOLUTE KO-space placement so the runtime reuses the proven object path
-(Terrain.KoToWorld + the same quaternion handedness flip). A zero-offset effect therefore
+(Terrain.MapToWorld + the same quaternion handedness flip). A zero-offset effect therefore
 lands exactly on its parent object. The effect's render scale is the slot `scale` (NOT the
 parent's mesh scale — region-marker anchors like `zz_fxx_alpha` carry huge scales).
 

@@ -7,7 +7,7 @@ made solid is in it (so decorative bushes/trees that merely *look* like obstacle
 is the authoritative answer to "which objects block the player", replacing name/size guesses.
 
 Reuses opd_convert's byte reader. Vertices are kept in KO world space (like placements.json); the
-client converts via Terrain.KoToWorld at runtime, keeping Coord.cs the single KO<->Godot boundary.
+client converts via Terrain.MapToWorld at runtime, keeping Coord.cs the single KO<->Godot boundary.
 
 Two header layouts exist and only the map dimensions tell them apart:
     legacy  [i32 nameLen][name (LCG 0x0816)][u32 compFlag][f32 w][f32 h][i32 faceCount]
