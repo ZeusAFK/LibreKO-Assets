@@ -13,15 +13,10 @@ carries the artist's original path, which names the tier.
 Tier n is RankSymbol.TierOf: 0 rank 1 (Gold Knight), 1 ranks 2-4 (Silver), 2 ranks 5-10
 (Mirage), 3 ranks 11-40 (Shadow), 4 ranks 41-100 (Mist), 5 ranks 101-200 (Training).
 
-Gold against black is inferred, not read from the retail executable (it is packed): the
-permanent national-point symbols are described as the monthly ladder ones with a yellow border,
-and LibreKO ranks "knights" on all-time points and "personal" on monthly points. If that proves
-backwards, swap the 20 and 30 in GROUPS.
-
 The ladder bars sit in the top-left of a 64x64 texture and get shorter with the tier, centred on
 the widest one, so the whole group is cropped to one shared box: every bar keeps the same size,
-as the chat log draws them at a fixed size. Left out on purpose: s_0_50..55 (byte-identical to 30..35) and ani_0_40..42 (the
-animated top-three bars; the client loads static PNGs only).
+as the chat log draws them at a fixed size. Left out on purpose: s_0_50..55 (byte-identical to
+30..35) and ani_0_40..42 (the animated top-three bars; the client loads static PNGs only).
 
 Output: <output>/ui/rank_symbol/{knights,personal,tier}_<0..5>.png
 
