@@ -411,6 +411,11 @@ def bake_sell_groups() -> dict[str, list]:
 
 PIECE_COUNT_BASE = 100
 PIECE_REWARD_STRIDE = 10000
+SLAVE_MERCHANT_CERTIFICATE_TEMPLATE = 800090000
+SLAVE_MERCHANT_CERTIFICATES = {
+    751730000: ("Slave Merchant Certificate (1 Day)", 24, 80044300),
+    891063000: ("Slave Merchant Certificate (30 Days)", 720, 80008700),
+}
 
 
 def bake_piece_exchange(items: dict[str, dict]) -> dict[str, list]:
@@ -524,6 +529,22 @@ def bake_texts() -> dict[str, str]:
     }
 
 
+def add_slave_merchant_certificates(items: dict[str, dict], resrcs: dict[int, int]) -> None:
+    template = items.get(str(SLAVE_MERCHANT_CERTIFICATE_TEMPLATE))
+    if template is None:
+        return
+    for iid, (name, hours, icon) in SLAVE_MERCHANT_CERTIFICATES.items():
+        items.setdefault(str(iid), {
+            **template,
+            "name": name,
+            "desc": f"Right-click to add {hours} hours of Slave Merchant time."
+                    "|While you have time, a Slave Merchant can take over your stall| and keep selling when you leave.",
+            "effect2": 0,
+            "icon": icon,
+        })
+        resrcs.setdefault(icon, iid)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--probe", type=int, default=0, help="decode only N sample icons, no JSON")
@@ -584,6 +605,8 @@ def main() -> int:
         }
         if resrc > 0:
             resrcs.setdefault(resrc, iid)
+
+    add_slave_merchant_certificates(items, resrcs)
 
     if args.icons_only:
         for ext_rows in bake_extensions().values():
