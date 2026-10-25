@@ -26,8 +26,11 @@ Ready flash. Domain/ReadyFlash.cs plays fifteen frames over a hotbar slot whose 
 (64x64) are ready_00..02 and skill_up_fx_0000..0011 (32x32) are ready_03..14. skill_up_fx_0012
 is not part of the sequence.
 
-Output: <output>/ui/war_board/<button>.png, <output>/ui/anger/anger.png and
-<output>/ui/hotbar_ready/ready_<nn>.png
+Familiar auto-cast. A familiar bar slot with automatic cast on loops Misc\RecastObject\final_01_0000..0019,
+`auto_00..19`.
+
+Output: <output>/ui/war_board/<button>.png, <output>/ui/anger/anger.png,
+<output>/ui/hotbar_ready/ready_<nn>.png and <output>/ui/familiar_auto/auto_<nn>.png
 
 Usage:
     python bake.py --only hud-art
@@ -57,6 +60,7 @@ WAR_BOARD = (
 ANGER_SHEET = "anger.dxt"
 READY_DIR = Path("Misc") / "RecastObject"
 READY_SEQUENCES = (("64shot", 3), ("skill_up_fx_", 12))
+FAMILIAR_AUTO_FRAMES = tuple(f"final_01_{index:04d}.dxt" for index in range(20))
 READY_FRAMES = tuple(f"{prefix}{index:04d}.dxt" for prefix, count in READY_SEQUENCES for index in range(count))
 
 
@@ -96,17 +100,16 @@ def bake(hdr: Path, src: Path, out_dir: Path) -> tuple[int, list[str]]:
     return baked, failed
 
 
-def bake_ready_flash(recast_dir: Path, out_dir: Path) -> tuple[int, list[str]]:
-    ready_dir = out_dir / "hotbar_ready"
-    ready_dir.mkdir(parents=True, exist_ok=True)
+def bake_sequence(recast_dir: Path, frames_dir: Path, stem: str, names: tuple[str, ...]) -> tuple[int, list[str]]:
+    frames_dir.mkdir(parents=True, exist_ok=True)
     baked, failed = 0, []
-    for index, name in enumerate(READY_FRAMES):
+    for index, name in enumerate(names):
         path = recast_dir / name
         frame = bake_items.decode_icon(path.read_bytes()) if path.is_file() else None
         if frame is None:
             failed.append(name)
             continue
-        frame.save(ready_dir / f"ready_{index:02d}.png", "PNG", optimize=True)
+        frame.save(frames_dir / f"{stem}_{index:02d}.png", "PNG", optimize=True)
         baked += 1
     return baked, failed
 
@@ -123,8 +126,12 @@ def main() -> int:
         return 2
 
     baked, failed = bake(hdr, src, args.out)
-    ready_baked, ready_failed = bake_ready_flash(args.ko / READY_DIR, args.out)
-    print(f"[hud-art] {baked + ready_baked}/{len(WAR_BOARD) + 1 + len(READY_FRAMES)} images -> {args.out}")
+    ready_baked, ready_failed = bake_sequence(args.ko / READY_DIR, args.out / "hotbar_ready", "ready", READY_FRAMES)
+    auto_baked, auto_failed = bake_sequence(args.ko / READY_DIR, args.out / "familiar_auto", "auto", FAMILIAR_AUTO_FRAMES)
+    ready_baked += auto_baked
+    ready_failed += auto_failed
+    total = len(WAR_BOARD) + 1 + len(READY_FRAMES) + len(FAMILIAR_AUTO_FRAMES)
+    print(f"[hud-art] {baked + ready_baked}/{total} images -> {args.out}")
     for key in failed:
         print(f"[hud-art] missing or undecodable: ui\\{key}", file=sys.stderr)
     for name in ready_failed:

@@ -1,7 +1,7 @@
 """bake_skills.py -- skills for the client: presentation from the retail tables, gameplay from the server seed.
 
     Skill_Magic_Main_us.tbl -> name, description, icon, animations, effects, attachments
-    Skill_Magic_1.tbl       -> the per-WEAPON animation of melee (Type-1) skills
+    Skill_Magic_1.tbl       -> the per-WEAPON animation of melee (Type-1) skills and the buff they need
     fx.tbl                  -> effect id -> bundle stem, kept only when that fx is baked
     <server>/Magic.json and MagicType1..9.json -> type, moral, costs, cast times, range, and the
                                effect row (duration, buff type, speed and stat changes) the client
@@ -30,6 +30,8 @@ _FX_ID, _FX_PATH = 0, 2
 _SK_ID, _SK_NAME, _SK_DESC, _SK_ICON = 0, 2, 3, 34
 _SK_COOLDOWN_GROUP = 35
 _SK_NEED_WEAPON, _SK_NEED_ITEM = 20, 21
+_SK_BUFF_ITEM = 5
+_SK_AUTO_CAST = 32
 (_SK_SELF_ANIM1, _SK_SELF_ANIM2, _SK_TARGET_ANIM,
  _SK_SELF_FX1, _SK_SELF_PART1, _SK_SELF_FX2, _SK_SELF_PART2,
  _SK_FLYING_FX, _SK_TARGET_FX, _SK_TARGET_PART, _SK_MORAL) = range(4, 15)
@@ -38,7 +40,10 @@ _SK_NEED_WEAPON, _SK_NEED_ITEM = 20, 21
 # equipped weapon (one-handed, two-handed, jamadar). The main table's SelfAnim1 only classifies a
 # Type-1 skill; it is never its animation.
 _T1_ID, _T1_ANIM_1H, _T1_ANIM_2H, _T1_ANIM_JAMADAR = 0, 9, 10, 11
+_T1_NEED_BUFF_TYPE, _T1_NEED_BUFF_SKILL = 12, 13
 _BUFF_TYPE = 4
+_TRANSFORM_TYPE = 6
+_LIST_TYPE2 = 1
 
 
 def _fx_stem(path: str, fx_dir: Path) -> str | None:
@@ -114,14 +119,19 @@ def main() -> int:
             "needWeapon": _int(row, _SK_NEED_WEAPON),
             "needItem": _int(row, _SK_NEED_ITEM),
             "cooldownGroup": _int(row, _SK_COOLDOWN_GROUP),
+            "buffItem": _int(row, _SK_BUFF_ITEM),
+            "autoCast": _int(row, _SK_AUTO_CAST) != 0,
         }
 
     melee: dict[int, tuple[int, int, int]] = {}
+    melee_needs: dict[int, tuple[int, int]] = {}
     type1_tbl = ko_data / "Skill_Magic_1.tbl"
     if type1_tbl.exists():
         for row in read_tbl(str(type1_tbl)).rows:
             if row and isinstance(row[_T1_ID], int) and len(row) > _T1_ANIM_JAMADAR:
                 melee[row[_T1_ID]] = (_int(row, _T1_ANIM_1H), _int(row, _T1_ANIM_2H), _int(row, _T1_ANIM_JAMADAR))
+                if _int(row, _T1_NEED_BUFF_TYPE):
+                    melee_needs[row[_T1_ID]] = (_int(row, _T1_NEED_BUFF_TYPE), _int(row, _T1_NEED_BUFF_SKILL))
     else:
         print(f"[skills] WARNING: {type1_tbl} missing; melee skills get no animation", file=sys.stderr)
 
@@ -222,6 +232,14 @@ def main() -> int:
                 "effect": effect,
             })
             skills[str(sid)] = record
+        for sid, s in skills.items():
+            if _TRANSFORM_TYPE not in (s["type1"], s["type2"]):
+                continue
+            item = items.get(presentation.get(int(sid), {}).get("buffItem", 0))
+            list_skill = int(item.get("effect1", 0) or 0) if item else 0
+            shown = skills.get(str(list_skill))
+            if shown and shown["type1"] == 0 and shown["type2"] == _LIST_TYPE2:
+                s["buffIcon"] = list_skill
         source = f"{len(magic)} server rows joined with {len(presentation)} client rows"
     else:
         print("[skills] WARNING: no server Seed/Data (pass --server-data); skills carry presentation only, "
@@ -230,6 +248,12 @@ def main() -> int:
             fx_ids = (pr["selfFx1Id"], pr["selfFx2Id"], pr["flyingFxId"], pr["targetFxId"])
             skills[str(sid)] = presentation_fields(sid, pr, str(sid), fx_ids)
         source = f"{len(presentation)} client rows, presentation only"
+
+    for sid, record in skills.items():
+        if int(sid) in melee_needs:
+            record["needBuffType"], record["needBuffSkill"] = melee_needs[int(sid)]
+        if presentation.get(int(sid), {}).get("autoCast"):
+            record["autoCast"] = 1
 
     overrides = Path(__file__).with_name("skill_overrides.json")
     if overrides.is_file():

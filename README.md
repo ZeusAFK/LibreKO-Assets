@@ -53,24 +53,28 @@ Stages run in order, and the order matters — later stages read what earlier on
 | `quests` | quest records and dialogue |
 | `terrain` | heightmaps, ground surface, water, collision |
 | `objects` | placed world geometry and standalone props |
-| `characters` | race bodies, armor parts, mobs, capes, wings, hand effects |
+| `characters` | race bodies, armor parts, mobs, the Under the Castle boss phases, NPC look opacity, capes, wings, hand effects |
+| `movies` | the Under the Castle cutscenes and their actor models |
 | `weapons` | weapon meshes, the enchant-guide chain and the swing-trail textures |
 | `fx` | effect descriptors, ids and placements |
 | `skills` | skill presentation and the transformation list |
-| `ui` | cursors, warp data, target symbol, the national-rank symbols, the War Board buttons, the anger gauge, the skill-ready flash, the fortune cards, the auction schedule and the combination recipes |
+| `ui` | cursors, warp data, target symbol, the national-rank symbols, the War Board buttons, the anger gauge, the skill-ready flash, the familiar auto-cast frames, the fortune cards, the auction schedule, the combination recipes, the equipment wear figure, NPC and monster lines with the speech balloon, and the Manes' Survival data |
 | `sky` | moon disc |
 | `sound` | audio archive to ogg |
 | `imports` | Godot import sidecars: VRAM compression and mipmaps for the 3D texture folders |
 
-Two ordering rules are load-bearing and easy to break by hand:
+Three ordering rules are load-bearing and easy to break by hand:
 
 - **`items` before `weapons`.** The weapon steps join against `items.json`.
 - **The weapon chain is a chain.** `weapons` *overwrites* `items/weapon/index.json`; `weapon-anchor`
   and `visual-aliases` then add fields back to that same file. Running `weapons` on its own leaves a
   file that still looks complete but has lost the enchant-guide and alias data, and nothing reports
   an error. Run the whole `weapons` stage or none of it.
+- **`boss-phases` after `mobs`.** `mobs` writes every NPC look; `boss-phases` bakes the Under the
+  Castle boss looks again with their phase clips. Running `mobs` on its own leaves those bosses
+  without them.
 
-`bake.py` encodes both. They only bite if you invoke a baker directly.
+`bake.py` encodes all three. They only bite if you invoke a baker directly.
 
 A third dependency crosses stages: `fx-placements` builds its zone list from the terrain already
 baked, so it produces nothing if `terrain` has not run. This is why `--only fx` against a fresh

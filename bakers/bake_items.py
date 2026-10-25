@@ -416,6 +416,9 @@ SLAVE_MERCHANT_CERTIFICATES = {
     751730000: ("Slave Merchant Certificate (1 Day)", 24, 80044300),
     891063000: ("Slave Merchant Certificate (30 Days)", 720, 80008700),
 }
+MISSING_ICON_SUBSTITUTES = {
+    978025000: 81023400,
+}
 
 
 def bake_piece_exchange(items: dict[str, dict]) -> dict[str, list]:
@@ -545,6 +548,14 @@ def add_slave_merchant_certificates(items: dict[str, dict], resrcs: dict[int, in
         resrcs.setdefault(icon, iid)
 
 
+def substitute_missing_icons(items: dict[str, dict], resrcs: dict[int, int]) -> None:
+    for iid, icon in MISSING_ICON_SUBSTITUTES.items():
+        item = items.get(str(iid))
+        if item is not None:
+            item["icon"] = icon
+            resrcs.setdefault(icon, iid)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--probe", type=int, default=0, help="decode only N sample icons, no JSON")
@@ -607,6 +618,7 @@ def main() -> int:
             resrcs.setdefault(resrc, iid)
 
     add_slave_merchant_certificates(items, resrcs)
+    substitute_missing_icons(items, resrcs)
 
     if args.icons_only:
         for ext_rows in bake_extensions().values():
